@@ -27,18 +27,10 @@ export default function TestPage() {
   const [testId] = useState(() => generateId());
   const [startedAt] = useState(() => Date.now());
 
-  if (!pageState) {
-    return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
-        <p className="text-text2">No test loaded.</p>
-        <button onClick={() => navigate('/')} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-sm">
-          Go Home
-        </button>
-      </div>
-    );
-  }
-
-  const { file, sections, timerConfig, testName } = pageState;
+  const sections = pageState?.sections ?? [];
+  const timerConfig = pageState?.timerConfig ?? { apparentSeconds: 3600, actualSeconds: 3600 };
+  const testName = pageState?.testName ?? 'Test';
+  const file = pageState?.file;
 
   const questionMap = useMemo(() => {
     const map: Record<string, { page: number }> = {};
@@ -59,7 +51,6 @@ export default function TestPage() {
     const info = questionMap[qId];
     if (info) {
       setScrollToPage(info.page);
-      // Reset after a tick so the same page can be scrolled to again
       setTimeout(() => setScrollToPage(undefined), 100);
     }
   }, [questionMap]);
@@ -79,7 +70,7 @@ export default function TestPage() {
   const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
   const answeredCount = Object.values(answers).filter(v => v.trim()).length;
 
-  const handleSubmit = () => {
+  const handleSubmit = useCallback(() => {
     const session: TestSession = {
       id: testId,
       name: testName,
@@ -92,7 +83,18 @@ export default function TestPage() {
     };
     saveTest(session);
     navigate('/');
-  };
+  }, [testId, testName, sections, answers, timerConfig, startedAt, navigate]);
+
+  if (!pageState || !file) {
+    return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
+        <p className="text-text2">No test loaded.</p>
+        <button onClick={() => navigate('/')} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-sm">
+          Go Home
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
