@@ -47,12 +47,12 @@ export default function PdfViewer({ file, scrollToPage }: PdfViewerProps) {
   if (!fileUrl) return null;
 
   return (
-    <div ref={containerRef} className="h-full overflow-y-auto scrollbar-thin bg-background">
+    <div ref={containerRef} className="h-full overflow-y-auto scrollbar-thin bg-jee-gray">
       <Document
         file={fileUrl}
         onLoadSuccess={onDocumentLoadSuccess}
         loading={
-          <div className="flex items-center justify-center h-64 text-text2 text-sm">
+          <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
             Loading PDF...
           </div>
         }

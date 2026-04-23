@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PdfViewer from '@/components/PdfViewer';
-import AnswerPanel from '@/components/AnswerPanel';
-import QuestionGrid from '@/components/QuestionGrid';
+import QuestionPalette from '@/components/QuestionPalette';
+import QuestionView from '@/components/QuestionView';
 import FasterTimer from '@/components/FasterTimer';
-import { DetectedSection, TimerConfig, TestSession } from '@/lib/types';
+import { DetectedSection, TimerConfig, TestSession, QuestionAnswer } from '@/lib/types';
 import { saveTest, generateId } from '@/lib/storage';
 
 interface TestPageState {
@@ -19,56 +19,148 @@ export default function TestPage() {
   const location = useLocation();
   const pageState = location.state as TestPageState | undefined;
 
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [activeQuestionId, setActiveQuestionId] = useState<string>();
-  const [scrollToPage, setScrollToPage] = useState<number>();
-  const [scrollToQuestionId, setScrollToQuestionId] = useState<string>();
-  const [mobileTab, setMobileTab] = useState<'paper' | 'answers'>('answers');
-  const [testId] = useState(() => generateId());
-  const [startedAt] = useState(() => Date.now());
-
   const sections = pageState?.sections ?? [];
   const timerConfig = pageState?.timerConfig ?? { apparentSeconds: 3600, actualSeconds: 3600 };
   const testName = pageState?.testName ?? 'Test';
   const file = pageState?.file;
 
+  const [answers, setAnswers] = useState<Record<string, QuestionAnswer>>({});
+  const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
+  const [visited, setVisited] = useState<Record<string, boolean>>({});
+  const [activeSectionId, setActiveSectionId] = useState<string>(() => sections[0]?.id ?? '');
+  const [activeQuestionId, setActiveQuestionId] = useState<string>(() => sections[0]?.questions[0]?.id ?? '');
+  const [scrollToPage, setScrollToPage] = useState<number>();
+  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'paper' | 'question'>('question');
+  const [testId] = useState(() => generateId());
+  const [startedAt] = useState(() => Date.now());
+
+  // Build flat question list per section
+  const sectionQuestions = useMemo(() => {
+    const map: Record<string, DetectedSection['questions']> = {};
+    for (const s of sections) {
+      map[s.id] = s.questions;
+    }
+    return map;
+  }, [sections]);
+
   const questionMap = useMemo(() => {
-    const map: Record<string, { page: number }> = {};
+    const map: Record<string, { page: number; sectionId: string }> = {};
     for (const s of sections) {
       for (const q of s.questions) {
-        map[q.id] = { page: q.page };
+        map[q.id] = { page: q.page, sectionId: s.id };
       }
     }
     return map;
   }, [sections]);
 
-  const handleAnswerChange = useCallback((qId: string, value: string) => {
-    setAnswers(prev => ({ ...prev, [qId]: value }));
+  const activeSection = useMemo(
+    () => sections.find(s => s.id === activeSectionId) ?? sections[0],
+    [sections, activeSectionId]
+  );
+
+  const activeQuestion = useMemo(
+    () => activeSection?.questions.find(q => q.id === activeQuestionId) ?? activeSection?.questions[0],
+    [activeSection, activeQuestionId]
+  );
+
+  const activeQuestionIndex = useMemo(
+    () => activeSection?.questions.findIndex(q => q.id === activeQuestionId) ?? 0,
+    [activeSection, activeQuestionId]
+  );
+
+  const markVisited = useCallback((qId: string) => {
+    setVisited(prev => {
+      if (prev[qId]) return prev;
+      return { ...prev, [qId]: true };
+    });
   }, []);
 
-  const handleQuestionFocus = useCallback((qId: string) => {
-    setActiveQuestionId(qId);
+  const navigateToQuestion = useCallback((qId: string) => {
     const info = questionMap[qId];
-    if (info) {
+    if (!info) return;
+    setActiveSectionId(info.sectionId);
+    setActiveQuestionId(qId);
+    markVisited(qId);
+    if (info.page !== undefined) {
       setScrollToPage(info.page);
       setTimeout(() => setScrollToPage(undefined), 100);
     }
-  }, [questionMap]);
+  }, [questionMap, markVisited]);
 
-  const handleGridClick = useCallback((qId: string) => {
-    setActiveQuestionId(qId);
-    const info = questionMap[qId];
-    if (info) {
-      setScrollToPage(info.page);
-      setTimeout(() => setScrollToPage(undefined), 100);
+  const handleAnswerChange = useCallback((qId: string, answer: QuestionAnswer) => {
+    setAnswers(prev => ({ ...prev, [qId]: answer }));
+  }, []);
+
+  const handleClearResponse = useCallback(() => {
+    if (!activeQuestionId) return;
+    setAnswers(prev => {
+      const next = { ...prev };
+      delete next[activeQuestionId];
+      return next;
+    });
+  }, [activeQuestionId]);
+
+  const handleSaveAndNext = useCallback(() => {
+    if (!activeQuestion) return;
+    const questions = activeSection.questions;
+    const idx = questions.findIndex(q => q.id === activeQuestionId);
+    if (idx < questions.length - 1) {
+      navigateToQuestion(questions[idx + 1].id);
+    } else {
+      // Move to next section
+      const sectionIdx = sections.findIndex(s => s.id === activeSectionId);
+      if (sectionIdx < sections.length - 1) {
+        const nextSection = sections[sectionIdx + 1];
+        navigateToQuestion(nextSection.questions[0]?.id);
+      }
     }
-    setScrollToQuestionId(qId);
-    setTimeout(() => setScrollToQuestionId(undefined), 100);
-    setMobileTab('answers');
-  }, [questionMap]);
+  }, [activeQuestion, activeSection, sections, activeSectionId, activeQuestionId, navigateToQuestion]);
+
+  const handleMarkForReviewAndNext = useCallback(() => {
+    if (!activeQuestionId) return;
+    setMarkedForReview(prev => ({ ...prev, [activeQuestionId]: true }));
+    handleSaveAndNext();
+  }, [activeQuestionId, handleSaveAndNext]);
+
+  const handlePrev = useCallback(() => {
+    if (!activeQuestion) return;
+    const questions = activeSection.questions;
+    const idx = questions.findIndex(q => q.id === activeQuestionId);
+    if (idx > 0) {
+      navigateToQuestion(questions[idx - 1].id);
+    } else {
+      // Move to previous section
+      const sectionIdx = sections.findIndex(s => s.id === activeSectionId);
+      if (sectionIdx > 0) {
+        const prevSection = sections[sectionIdx - 1];
+        navigateToQuestion(prevSection.questions[prevSection.questions.length - 1]?.id);
+      }
+    }
+  }, [activeQuestion, activeSection, sections, activeSectionId, activeQuestionId, navigateToQuestion]);
+
+  const handleNext = useCallback(() => {
+    if (!activeQuestion) return;
+    const questions = activeSection.questions;
+    const idx = questions.findIndex(q => q.id === activeQuestionId);
+    if (idx < questions.length - 1) {
+      navigateToQuestion(questions[idx + 1].id);
+    } else {
+      const sectionIdx = sections.findIndex(s => s.id === activeSectionId);
+      if (sectionIdx < sections.length - 1) {
+        const nextSection = sections[sectionIdx + 1];
+        navigateToQuestion(nextSection.questions[0]?.id);
+      }
+    }
+  }, [activeQuestion, activeSection, sections, activeSectionId, activeQuestionId, navigateToQuestion]);
+
+  const handlePaletteClick = useCallback((qId: string) => {
+    navigateToQuestion(qId);
+    setMobileTab('question');
+  }, [navigateToQuestion]);
 
   const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
-  const answeredCount = Object.values(answers).filter(v => v.trim()).length;
+  const answeredCount = Object.values(answers).filter(a => a.options.length > 0 || a.numerical.trim()).length;
 
   const handleSubmit = useCallback(() => {
     const session: TestSession = {
@@ -76,6 +168,8 @@ export default function TestPage() {
       name: testName,
       sections,
       answers,
+      markedForReview,
+      visited,
       timerConfig,
       startedAt,
       completedAt: Date.now(),
@@ -83,13 +177,13 @@ export default function TestPage() {
     };
     saveTest(session);
     navigate('/');
-  }, [testId, testName, sections, answers, timerConfig, startedAt, navigate]);
+  }, [testId, testName, sections, answers, markedForReview, visited, timerConfig, startedAt, navigate]);
 
   if (!pageState || !file) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4">
-        <p className="text-text2">No test loaded.</p>
-        <button onClick={() => navigate('/')} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-sm">
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-white">
+        <p className="text-muted-foreground">No test loaded.</p>
+        <button onClick={() => navigate('/')} className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-bold text-sm">
           Go Home
         </button>
       </div>
@@ -97,66 +191,124 @@ export default function TestPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-3 py-2 bg-surf border-b border-border flex-shrink-0">
+    <div className="h-screen flex flex-col overflow-hidden bg-white">
+      {/* Top header bar - JEE Navy */}
+      <header className="flex items-center justify-between px-4 py-2 bg-jee-navy text-white flex-shrink-0">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="w-8 h-8 rounded-lg bg-surf2 flex items-center justify-center text-text2 hover:text-foreground text-sm">←</button>
+          <button onClick={() => navigate('/')} className="w-8 h-8 rounded-md bg-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 text-sm transition-colors">
+            &larr;
+          </button>
           <div>
-            <h1 className="text-sm font-extrabold truncate max-w-[150px] md:max-w-none">{testName}</h1>
-            <p className="text-[10px] text-text2">{answeredCount}/{totalQuestions} answered</p>
+            <h1 className="text-sm font-bold truncate max-w-[200px] md:max-w-none">{testName}</h1>
+            <p className="text-[10px] text-white/60">{answeredCount}/{totalQuestions} answered</p>
           </div>
         </div>
         <FasterTimer config={timerConfig} compact onTimeUp={handleSubmit} />
-        <button onClick={handleSubmit} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold ml-2 flex-shrink-0">
-          Submit
+        <button onClick={handleSubmit} className="px-4 py-1.5 rounded-md bg-jee-red text-white text-xs font-bold flex-shrink-0 hover:bg-jee-red/90 transition-colors">
+          Submit Test
         </button>
       </header>
 
+      {/* Section navigation tabs */}
+      <div className="flex items-center bg-jee-navy-light text-white flex-shrink-0 border-t border-white/10">
+        {sections.map(section => {
+          const isActive = section.id === activeSectionId;
+          const sectionAnswered = section.questions.filter(q => {
+            const a = answers[q.id];
+            return a && (a.options.length > 0 || a.numerical.trim());
+          }).length;
+          return (
+            <button
+              key={section.id}
+              onClick={() => {
+                setActiveSectionId(section.id);
+                if (!section.questions.find(q => q.id === activeQuestionId)) {
+                  navigateToQuestion(section.questions[0]?.id);
+                }
+              }}
+              className={`flex-1 py-2.5 text-xs font-bold tracking-wide text-center transition-all relative
+                ${isActive
+                  ? 'bg-white text-foreground'
+                  : 'text-white/70 hover:text-white hover:bg-white/10'
+                }
+              `}
+            >
+              {section.subject} - Section {section.sectionNumber}
+              <span className={`ml-1.5 text-[10px] ${isActive ? 'text-primary' : 'text-white/40'}`}>
+                ({sectionAnswered}/{section.questions.length})
+              </span>
+              {isActive && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Mobile tab bar */}
-      <div className="md:hidden flex border-b border-border flex-shrink-0">
+      <div className="md:hidden flex border-b border-border flex-shrink-0 bg-white">
         <button
           onClick={() => setMobileTab('paper')}
-          className={`flex-1 py-2 text-xs font-bold tracking-wide text-center transition-colors ${mobileTab === 'paper' ? 'text-primary border-b-2 border-primary' : 'text-text2'}`}
+          className={`flex-1 py-2 text-xs font-bold tracking-wide text-center transition-colors ${mobileTab === 'paper' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
         >
-          📄 Paper
+          Paper
         </button>
         <button
-          onClick={() => setMobileTab('answers')}
-          className={`flex-1 py-2 text-xs font-bold tracking-wide text-center transition-colors ${mobileTab === 'answers' ? 'text-primary border-b-2 border-primary' : 'text-text2'}`}
+          onClick={() => setMobileTab('question')}
+          className={`flex-1 py-2 text-xs font-bold tracking-wide text-center transition-colors ${mobileTab === 'question' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
         >
-          ✏️ Answers
+          Question
         </button>
       </div>
 
-      {/* Main content */}
+      {/* Main content area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* PDF Viewer */}
-        <div className={`${mobileTab === 'paper' ? 'flex' : 'hidden'} md:flex md:flex-1 flex-col min-w-0 flex-1`}>
+        {/* PDF Viewer - left side */}
+        <div className={`${mobileTab === 'paper' ? 'flex' : 'hidden'} md:flex flex-col min-w-0 flex-1 border-r border-border`}>
           <PdfViewer file={file} scrollToPage={scrollToPage} />
         </div>
 
-        {/* Divider */}
-        <div className="hidden md:block w-px bg-border flex-shrink-0" />
+        {/* Question view - center */}
+        <div className={`${mobileTab === 'question' ? 'flex' : 'hidden'} md:flex flex-col min-w-0 md:w-[400px] lg:w-[440px] flex-shrink-0 border-r border-border`}>
+          {activeQuestion && activeSection && (
+            <QuestionView
+              section={activeSection}
+              question={activeQuestion}
+              questionIndex={activeQuestionIndex}
+              totalInSection={activeSection.questions.length}
+              answer={answers[activeQuestion.id] ?? { options: [], numerical: '' }}
+              onAnswerChange={handleAnswerChange}
+              onClearResponse={handleClearResponse}
+              onSaveAndNext={handleSaveAndNext}
+              onMarkForReviewAndNext={handleMarkForReviewAndNext}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              isFirst={activeQuestionIndex === 0 && sections.findIndex(s => s.id === activeSectionId) === 0}
+              isLast={activeQuestionIndex === activeSection.questions.length - 1 && sections.findIndex(s => s.id === activeSectionId) === sections.length - 1}
+            />
+          )}
+        </div>
 
-        {/* Right panel */}
-        <div className={`${mobileTab === 'answers' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[380px] lg:w-[420px] flex-shrink-0 p-3 gap-3 overflow-hidden`}>
-          <QuestionGrid
+        {/* Question Palette - right side */}
+        <div className={`hidden md:flex flex-col flex-shrink-0 transition-all duration-200 ${paletteCollapsed ? 'w-0 overflow-hidden' : 'w-[220px] lg:w-[240px]'}`}>
+          <QuestionPalette
             sections={sections}
             answers={answers}
+            markedForReview={markedForReview}
+            visited={visited}
             activeQuestionId={activeQuestionId}
-            onQuestionClick={handleGridClick}
-          />
-          <div className="h-px bg-border flex-shrink-0" />
-          <AnswerPanel
-            sections={sections}
-            answers={answers}
-            activeQuestionId={activeQuestionId}
-            onAnswerChange={handleAnswerChange}
-            onQuestionFocus={handleQuestionFocus}
-            scrollToQuestionId={scrollToQuestionId}
+            onQuestionClick={handlePaletteClick}
           />
         </div>
+
+        {/* Palette toggle button */}
+        <button
+          onClick={() => setPaletteCollapsed(!paletteCollapsed)}
+          className="hidden md:flex items-center justify-center w-5 bg-jee-gray2 hover:bg-border text-muted-foreground hover:text-foreground text-xs flex-shrink-0 border-l border-border transition-colors"
+          title={paletteCollapsed ? 'Show palette' : 'Hide palette'}
+        >
+          {paletteCollapsed ? '\u203A' : '\u2039'}
+        </button>
       </div>
     </div>
   );

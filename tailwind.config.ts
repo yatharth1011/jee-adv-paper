@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ["Manrope", "sans-serif"],
+        display: ["Inter", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       colors: {
@@ -38,6 +38,21 @@ export default {
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        jee: {
+          navy: "hsl(var(--jee-navy))",
+          "navy-light": "hsl(var(--jee-navy-light))",
+          gray: "hsl(var(--jee-gray))",
+          gray2: "hsl(var(--jee-gray2))",
+          green: "hsl(var(--jee-green))",
+          red: "hsl(var(--jee-red))",
+          purple: "hsl(var(--jee-purple))",
+          orange: "hsl(var(--jee-orange))",
+          "gray-dot": "hsl(var(--jee-gray-dot))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",

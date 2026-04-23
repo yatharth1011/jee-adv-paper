@@ -1,11 +1,37 @@
-import { TestSession } from './types';
+import { TestSession, QuestionAnswer } from './types';
 
 const TESTS_KEY = 'examSimulator_tests';
+
+function migrateOldAnswers(data: any): TestSession[] {
+  if (!Array.isArray(data)) return [];
+  return data.map((test: any) => {
+    if (test.answers && typeof Object.values(test.answers)[0] === 'string') {
+      const newAnswers: Record<string, QuestionAnswer> = {};
+      for (const [k, v] of Object.entries(test.answers as Record<string, string>)) {
+        if (v.trim()) {
+          if (/^[A-D]+$/.test(v)) {
+            newAnswers[k] = { options: v.split(''), numerical: '' };
+          } else {
+            newAnswers[k] = { options: [], numerical: v };
+          }
+        } else {
+          newAnswers[k] = { options: [], numerical: '' };
+        }
+      }
+      test.answers = newAnswers;
+    }
+    if (!test.markedForReview) test.markedForReview = {};
+    if (!test.visited) test.visited = {};
+    return test;
+  });
+}
 
 export function getSavedTests(): TestSession[] {
   try {
     const data = localStorage.getItem(TESTS_KEY);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    return migrateOldAnswers(parsed);
   } catch {
     return [];
   }
