@@ -50,7 +50,6 @@ function findQuestionYRatio(items: PageTextItem[], pageHeight: number, qNum: num
   for (const item of items) {
     const match = item.str.match(/^Q\.(\d+)/);
     if (match && parseInt(match[1]) === qNum) {
-      // PDF y is from bottom, so invert: ratio = 1 - (y / pageHeight)
       const ratio = 1 - (item.y / pageHeight);
       return Math.max(0, Math.min(1, ratio));
     }
@@ -58,27 +57,41 @@ function findQuestionYRatio(items: PageTextItem[], pageHeight: number, qNum: num
   return 0;
 }
 
+function detectSubject(pageText: string, currentSubject: string): string {
+  const physicsKeywords = ['physics', 'kinematics', 'mechanics', 'thermodynamics', 'electromagnetism', 'optics', 'waves', 'motion', 'force', 'energy', 'momentum', 'pressure', 'velocity', 'acceleration'];
+  const chemistryKeywords = ['chemistry', 'chemical', 'molecule', 'atom', 'reaction', 'bond', 'acid', 'base', 'solution', 'oxidation', 'reduction', 'equilibrium', 'mole', 'atomic', 'compound', 'organic', 'inorganic'];
+  const mathsKeywords = ['mathematics', 'math', 'calculus', 'algebra', 'geometry', 'trigonometry', 'vectors', 'matrix', 'function', 'equation', 'integral', 'derivative', 'polynomial', 'sequence', 'series', 'probability'];
+
+  const lowerText = pageText.toLowerCase();
+  const physicsScore = physicsKeywords.filter(k => lowerText.includes(k)).length;
+  const chemistryScore = chemistryKeywords.filter(k => lowerText.includes(k)).length;
+  const mathsScore = mathsKeywords.filter(k => lowerText.includes(k)).length;
+
+  if (physicsScore > chemistryScore && physicsScore > mathsScore && physicsScore > 0) return 'Physics';
+  if (chemistryScore > physicsScore && chemistryScore > mathsScore && chemistryScore > 0) return 'Chemistry';
+  if (mathsScore > physicsScore && mathsScore > chemistryScore && mathsScore > 0) return 'Mathematics';
+
+  return currentSubject;
+}
+
 export async function parsePdfSections(file: File): Promise<DetectedSection[]> {
   const pages = await extractAllPageTexts(file);
   const sections: DetectedSection[] = [];
-  let currentSubject = 'General';
+  let currentSubject = 'Physics';
   let currentSection: DetectedSection | null = null;
   let globalSectionIdx = 0;
 
   for (const { pageIndex, text, items, pageHeight } of pages) {
-    const subjectMatch = text.match(/\b(Mathematics|Physics|Chemistry|Biology|English|General\s*Studies)\b/i);
-    if (subjectMatch) {
-      const newSubject = subjectMatch[1].trim();
-      if (newSubject.toLowerCase() !== currentSubject.toLowerCase()) {
-        currentSubject = newSubject;
-        currentSection = null;
-      }
+    const detectedSubject = detectSubject(text, currentSubject);
+    if (detectedSubject !== currentSubject) {
+      currentSubject = detectedSubject;
+      currentSection = null;
     }
 
     const sectionMatches = [...text.matchAll(/SECTION\s+(\d+)/gi)];
     for (const sm of sectionMatches) {
       const sectionNum = parseInt(sm[1]);
-      const sectionId = `${currentSubject.toLowerCase().replace(/\s+/g, '')}-s${sectionNum}-${globalSectionIdx}`;
+      const sectionId = `${currentSubject.toLowerCase()}-s${sectionNum}-${globalSectionIdx}`;
 
       const existing = sections.find(
         s => s.subject === currentSubject && s.sectionNumber === sectionNum &&
@@ -102,7 +115,7 @@ export async function parsePdfSections(file: File): Promise<DetectedSection[]> {
 
     if (!currentSection) {
       currentSection = {
-        id: `${currentSubject.toLowerCase().replace(/\s+/g, '')}-s1-${globalSectionIdx}`,
+        id: `${currentSubject.toLowerCase()}-s1-${globalSectionIdx}`,
         subject: currentSubject,
         sectionNumber: 1,
         sectionLabel: `${currentSubject} - Section 1`,
