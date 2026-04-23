@@ -159,6 +159,24 @@ export default function Index() {
           {error && <p className="text-destructive text-xs mt-2">{error}</p>}
         </div>
 
+        {/* Default Papers */}
+        <div className="mb-8">
+          <h2 className="text-sm font-bold text-text2 tracking-widest uppercase mb-4">JEE Advanced Papers</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {DEFAULT_PAPERS.map(p => (
+              <button
+                key={p.url}
+                onClick={() => handleDefaultPaper(p)}
+                disabled={parsing}
+                className="text-left bg-surf hover:bg-surf2 disabled:opacity-50 border border-border hover:border-primary/40 rounded-xl px-3 py-2.5 transition-all group"
+              >
+                <div className="text-[10px] text-text3 tracking-widest uppercase font-bold">{p.year}</div>
+                <div className="text-sm font-extrabold group-hover:text-primary transition-colors">Paper {p.paper}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Past tests */}
         <div>
           <h2 className="text-sm font-bold text-text2 tracking-widest uppercase mb-4">Past Tests</h2>
