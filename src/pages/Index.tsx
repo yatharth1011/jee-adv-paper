@@ -17,11 +17,9 @@ export default function Index() {
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState('');
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const processFile = useCallback(async (f: File, displayName?: string) => {
     setFile(f);
-    setTestName(f.name.replace(/\.pdf$/i, ''));
+    setTestName((displayName ?? f.name).replace(/\.pdf$/i, ''));
     setParsing(true);
     setError('');
     try {
@@ -38,6 +36,24 @@ export default function Index() {
     }
     setParsing(false);
   }, []);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    await processFile(f);
+  }, [processFile]);
+
+  const handleDefaultPaper = useCallback(async (p: DefaultPaper) => {
+    setError('');
+    setParsing(true);
+    try {
+      const f = await fetchPaperAsFile(p);
+      await processFile(f, p.name);
+    } catch (err) {
+      setError((err as Error).message);
+      setParsing(false);
+    }
+  }, [processFile]);
 
   const handleStart = () => {
     if (!file || sections.length === 0) return;
