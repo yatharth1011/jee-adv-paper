@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { parsePdfSections } from '@/lib/pdfParser';
 import { getSavedTests, deleteTest } from '@/lib/storage';
 import { DetectedSection, TimerConfig, TestSession } from '@/lib/types';
+import { DEFAULT_PAPERS, fetchPaperAsFile, DefaultPaper } from '@/lib/defaultPapers';
 import TimerSetup from '@/components/TimerSetup';
 
 export default function Index() {
@@ -16,11 +17,9 @@ export default function Index() {
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState('');
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const processFile = useCallback(async (f: File, displayName?: string) => {
     setFile(f);
-    setTestName(f.name.replace(/\.pdf$/i, ''));
+    setTestName((displayName ?? f.name).replace(/\.pdf$/i, ''));
     setParsing(true);
     setError('');
     try {
@@ -37,6 +36,24 @@ export default function Index() {
     }
     setParsing(false);
   }, []);
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    await processFile(f);
+  }, [processFile]);
+
+  const handleDefaultPaper = useCallback(async (p: DefaultPaper) => {
+    setError('');
+    setParsing(true);
+    try {
+      const f = await fetchPaperAsFile(p);
+      await processFile(f, p.name);
+    } catch (err) {
+      setError((err as Error).message);
+      setParsing(false);
+    }
+  }, [processFile]);
 
   const handleStart = () => {
     if (!file || sections.length === 0) return;
@@ -140,6 +157,24 @@ export default function Index() {
             <span className="text-xs text-text2 mt-1">PDF format • JEE/NEET style supported</span>
           </label>
           {error && <p className="text-destructive text-xs mt-2">{error}</p>}
+        </div>
+
+        {/* Default Papers */}
+        <div className="mb-8">
+          <h2 className="text-sm font-bold text-text2 tracking-widest uppercase mb-4">JEE Advanced Papers</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {DEFAULT_PAPERS.map(p => (
+              <button
+                key={p.url}
+                onClick={() => handleDefaultPaper(p)}
+                disabled={parsing}
+                className="text-left bg-surf hover:bg-surf2 disabled:opacity-50 border border-border hover:border-primary/40 rounded-xl px-3 py-2.5 transition-all group"
+              >
+                <div className="text-[10px] text-text3 tracking-widest uppercase font-bold">{p.year}</div>
+                <div className="text-sm font-extrabold group-hover:text-primary transition-colors">Paper {p.paper}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Past tests */}
