@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { parsePdfSections } from '@/lib/pdfParser';
 import { getSavedTests, deleteTest } from '@/lib/storage';
 import { DetectedSection, TimerConfig, TestSession } from '@/lib/types';
+import { DEFAULT_PAPERS, fetchPaperAsFile, DefaultPaper } from '@/lib/defaultPapers';
 import TimerSetup from '@/components/TimerSetup';
 
 export default function Index() {
