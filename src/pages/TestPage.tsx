@@ -29,20 +29,11 @@ export default function TestPage() {
   const [visited, setVisited] = useState<Record<string, boolean>>({});
   const [activeSectionId, setActiveSectionId] = useState<string>(() => sections[0]?.id ?? '');
   const [activeQuestionId, setActiveQuestionId] = useState<string>(() => sections[0]?.questions[0]?.id ?? '');
-  const [scrollToPage, setScrollToPage] = useState<number>();
+  const [scrollToQuestionId, setScrollToQuestionId] = useState<string>();
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<'paper' | 'question'>('question');
   const [testId] = useState(() => generateId());
   const [startedAt] = useState(() => Date.now());
-
-  // Build flat question list per section
-  const sectionQuestions = useMemo(() => {
-    const map: Record<string, DetectedSection['questions']> = {};
-    for (const s of sections) {
-      map[s.id] = s.questions;
-    }
-    return map;
-  }, [sections]);
 
   const questionMap = useMemo(() => {
     const map: Record<string, { page: number; sectionId: string }> = {};
@@ -82,10 +73,8 @@ export default function TestPage() {
     setActiveSectionId(info.sectionId);
     setActiveQuestionId(qId);
     markVisited(qId);
-    if (info.page !== undefined) {
-      setScrollToPage(info.page);
-      setTimeout(() => setScrollToPage(undefined), 100);
-    }
+    setScrollToQuestionId(qId);
+    setTimeout(() => setScrollToQuestionId(undefined), 200);
   }, [questionMap, markVisited]);
 
   const handleAnswerChange = useCallback((qId: string, answer: QuestionAnswer) => {
@@ -108,7 +97,6 @@ export default function TestPage() {
     if (idx < questions.length - 1) {
       navigateToQuestion(questions[idx + 1].id);
     } else {
-      // Move to next section
       const sectionIdx = sections.findIndex(s => s.id === activeSectionId);
       if (sectionIdx < sections.length - 1) {
         const nextSection = sections[sectionIdx + 1];
@@ -130,7 +118,6 @@ export default function TestPage() {
     if (idx > 0) {
       navigateToQuestion(questions[idx - 1].id);
     } else {
-      // Move to previous section
       const sectionIdx = sections.findIndex(s => s.id === activeSectionId);
       if (sectionIdx > 0) {
         const prevSection = sections[sectionIdx - 1];
@@ -181,7 +168,7 @@ export default function TestPage() {
 
   if (!pageState || !file) {
     return (
-      <div className="min-h-screen flex items-center justify-center flex-col gap-4 bg-white">
+      <div className="h-screen flex items-center justify-center flex-col gap-4 bg-white">
         <p className="text-muted-foreground">No test loaded.</p>
         <button onClick={() => navigate('/')} className="px-4 py-2 rounded-md bg-primary text-primary-foreground font-bold text-sm">
           Go Home
@@ -191,9 +178,9 @@ export default function TestPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-white">
+    <div className="h-screen flex flex-col bg-white" style={{ overflow: 'hidden' }}>
       {/* Top header bar - JEE Navy */}
-      <header className="flex items-center justify-between px-4 py-2 bg-jee-navy text-white flex-shrink-0">
+      <header className="flex items-center justify-between px-4 py-2 bg-jee-navy text-white" style={{ flexShrink: 0 }}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="w-8 h-8 rounded-md bg-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 text-sm transition-colors">
             &larr;
@@ -204,13 +191,13 @@ export default function TestPage() {
           </div>
         </div>
         <FasterTimer config={timerConfig} compact onTimeUp={handleSubmit} />
-        <button onClick={handleSubmit} className="px-4 py-1.5 rounded-md bg-jee-red text-white text-xs font-bold flex-shrink-0 hover:bg-jee-red/90 transition-colors">
+        <button onClick={handleSubmit} className="px-4 py-1.5 rounded-md bg-jee-red text-white text-xs font-bold hover:bg-jee-red/90 transition-colors" style={{ flexShrink: 0 }}>
           Submit Test
         </button>
       </header>
 
       {/* Section navigation tabs */}
-      <div className="flex items-center bg-jee-navy-light text-white flex-shrink-0 border-t border-white/10">
+      <div className="flex items-center bg-jee-navy-light text-white" style={{ flexShrink: 0 }}>
         {sections.map(section => {
           const isActive = section.id === activeSectionId;
           const sectionAnswered = section.questions.filter(q => {
@@ -246,7 +233,7 @@ export default function TestPage() {
       </div>
 
       {/* Mobile tab bar */}
-      <div className="md:hidden flex border-b border-border flex-shrink-0 bg-white">
+      <div className="md:hidden flex border-b border-border bg-white" style={{ flexShrink: 0 }}>
         <button
           onClick={() => setMobileTab('paper')}
           className={`flex-1 py-2 text-xs font-bold tracking-wide text-center transition-colors ${mobileTab === 'paper' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground'}`}
@@ -261,15 +248,15 @@ export default function TestPage() {
         </button>
       </div>
 
-      {/* Main content area */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main content area - uses calc to fill remaining height exactly */}
+      <div className="flex" style={{ flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
         {/* PDF Viewer - left side */}
-        <div className={`${mobileTab === 'paper' ? 'flex' : 'hidden'} md:flex flex-col min-w-0 flex-1 border-r border-border`}>
-          <PdfViewer file={file} scrollToPage={scrollToPage} />
+        <div className={`${mobileTab === 'paper' ? 'flex' : 'hidden'} md:flex flex-col min-w-0 border-r border-border`} style={{ flex: '1 1 0%', minHeight: 0, overflow: 'hidden' }}>
+          <PdfViewer file={file} sections={sections} scrollToQuestionId={scrollToQuestionId} />
         </div>
 
         {/* Question view - center */}
-        <div className={`${mobileTab === 'question' ? 'flex' : 'hidden'} md:flex flex-col min-w-0 md:w-[400px] lg:w-[440px] flex-shrink-0 border-r border-border`}>
+        <div className={`${mobileTab === 'question' ? 'flex' : 'hidden'} md:flex flex-col min-w-0 border-r border-border`} style={{ width: '400px', flexShrink: 0, minHeight: 0, overflow: 'hidden' }}>
           {activeQuestion && activeSection && (
             <QuestionView
               section={activeSection}
@@ -290,7 +277,7 @@ export default function TestPage() {
         </div>
 
         {/* Question Palette - right side */}
-        <div className={`hidden md:flex flex-col flex-shrink-0 transition-all duration-200 ${paletteCollapsed ? 'w-0 overflow-hidden' : 'w-[220px] lg:w-[240px]'}`}>
+        <div className={`hidden md:flex flex-col transition-all duration-200`} style={{ width: paletteCollapsed ? 0 : 220, flexShrink: 0, minHeight: 0, overflow: paletteCollapsed ? 'hidden' : 'auto' }}>
           <QuestionPalette
             sections={sections}
             answers={answers}
@@ -304,7 +291,8 @@ export default function TestPage() {
         {/* Palette toggle button */}
         <button
           onClick={() => setPaletteCollapsed(!paletteCollapsed)}
-          className="hidden md:flex items-center justify-center w-5 bg-jee-gray2 hover:bg-border text-muted-foreground hover:text-foreground text-xs flex-shrink-0 border-l border-border transition-colors"
+          className="hidden md:flex items-center justify-center w-5 bg-jee-gray2 hover:bg-border text-muted-foreground hover:text-foreground text-xs border-l border-border transition-colors"
+          style={{ flexShrink: 0 }}
           title={paletteCollapsed ? 'Show palette' : 'Hide palette'}
         >
           {paletteCollapsed ? '\u203A' : '\u2039'}

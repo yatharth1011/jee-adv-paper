@@ -120,7 +120,7 @@ export default function Index() {
           </div>
 
           <div className="mb-6">
-            <TimerSetup initial={timerConfig} onApply={setTimerConfig} />
+            <TimerSetup initial={timerConfig} onChange={setTimerConfig} />
           </div>
 
           <button

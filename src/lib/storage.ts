@@ -22,6 +22,16 @@ function migrateOldAnswers(data: any): TestSession[] {
     }
     if (!test.markedForReview) test.markedForReview = {};
     if (!test.visited) test.visited = {};
+    // Ensure questions have yRatio
+    if (test.sections) {
+      for (const s of test.sections) {
+        if (s.questions) {
+          for (const q of s.questions) {
+            if (q.yRatio === undefined) q.yRatio = 0;
+          }
+        }
+      }
+    }
     return test;
   });
 }

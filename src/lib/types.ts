@@ -5,6 +5,7 @@ export interface DetectedQuestion {
   label: string;
   number: number;
   page: number;
+  yRatio: number; // 0-1 ratio of vertical position on the page
 }
 
 export interface DetectedSection {
@@ -21,8 +22,8 @@ export interface TimerConfig {
 }
 
 export interface QuestionAnswer {
-  options: string[]; // e.g. ['A', 'C'] for multiple correct
-  numerical: string; // e.g. "3.14" or "42"
+  options: string[];
+  numerical: string;
 }
 
 export interface TestSession {

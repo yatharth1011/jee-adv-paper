@@ -5,9 +5,18 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 export { pdfjs };
 
+interface PageTextItem {
+  str: string;
+  transform: number[];
+  y: number;
+  height: number;
+}
+
 interface PageText {
   pageIndex: number;
   text: string;
+  items: PageTextItem[];
+  pageHeight: number;
 }
 
 async function extractAllPageTexts(file: File): Promise<PageText[]> {
@@ -17,12 +26,36 @@ async function extractAllPageTexts(file: File): Promise<PageText[]> {
 
   for (let i = 0; i < pdf.numPages; i++) {
     const page = await pdf.getPage(i + 1);
+    const viewport = page.getViewport({ scale: 1 });
     const textContent = await page.getTextContent();
-    const text = textContent.items.map((item: any) => item.str).join(' ');
-    pages.push({ pageIndex: i, text });
+    const items: PageTextItem[] = textContent.items.map((item: any) => ({
+      str: item.str,
+      transform: item.transform,
+      y: item.transform ? item.transform[5] : 0,
+      height: item.height || 10,
+    }));
+    const text = items.map(item => item.str).join(' ');
+    pages.push({
+      pageIndex: i,
+      text,
+      items,
+      pageHeight: viewport.height,
+    });
   }
 
   return pages;
+}
+
+function findQuestionYRatio(items: PageTextItem[], pageHeight: number, qNum: number): number {
+  for (const item of items) {
+    const match = item.str.match(/^Q\.(\d+)/);
+    if (match && parseInt(match[1]) === qNum) {
+      // PDF y is from bottom, so invert: ratio = 1 - (y / pageHeight)
+      const ratio = 1 - (item.y / pageHeight);
+      return Math.max(0, Math.min(1, ratio));
+    }
+  }
+  return 0;
 }
 
 export async function parsePdfSections(file: File): Promise<DetectedSection[]> {
@@ -32,35 +65,32 @@ export async function parsePdfSections(file: File): Promise<DetectedSection[]> {
   let currentSection: DetectedSection | null = null;
   let globalSectionIdx = 0;
 
-  for (const { pageIndex, text } of pages) {
-    // Detect subject changes
+  for (const { pageIndex, text, items, pageHeight } of pages) {
     const subjectMatch = text.match(/\b(Mathematics|Physics|Chemistry|Biology|English|General\s*Studies)\b/i);
     if (subjectMatch) {
       const newSubject = subjectMatch[1].trim();
       if (newSubject.toLowerCase() !== currentSubject.toLowerCase()) {
         currentSubject = newSubject;
-        currentSection = null; // reset section on subject change
+        currentSection = null;
       }
     }
 
-    // Detect section headers
     const sectionMatches = [...text.matchAll(/SECTION\s+(\d+)/gi)];
     for (const sm of sectionMatches) {
       const sectionNum = parseInt(sm[1]);
       const sectionId = `${currentSubject.toLowerCase().replace(/\s+/g, '')}-s${sectionNum}-${globalSectionIdx}`;
-      
-      // Check if we already have this exact section
+
       const existing = sections.find(
-        s => s.subject === currentSubject && s.sectionNumber === sectionNum && 
+        s => s.subject === currentSubject && s.sectionNumber === sectionNum &&
         Math.abs(sections.indexOf(s) - globalSectionIdx) < 2
       );
-      
+
       if (!existing || existing.subject !== currentSubject) {
         currentSection = {
           id: sectionId,
           subject: currentSubject,
           sectionNumber: sectionNum,
-          sectionLabel: `${currentSubject} — Section ${sectionNum}`,
+          sectionLabel: `${currentSubject} - Section ${sectionNum}`,
           questions: [],
         };
         sections.push(currentSection);
@@ -70,35 +100,34 @@ export async function parsePdfSections(file: File): Promise<DetectedSection[]> {
       }
     }
 
-    // If no section yet, create a default one
     if (!currentSection) {
       currentSection = {
         id: `${currentSubject.toLowerCase().replace(/\s+/g, '')}-s1-${globalSectionIdx}`,
         subject: currentSubject,
         sectionNumber: 1,
-        sectionLabel: `${currentSubject} — Section 1`,
+        sectionLabel: `${currentSubject} - Section 1`,
         questions: [],
       };
       sections.push(currentSection);
       globalSectionIdx++;
     }
 
-    // Detect questions - match Q.1, Q.2, etc.
     const qMatches = [...text.matchAll(/Q\.(\d+)/g)];
     for (const qm of qMatches) {
       const qNum = parseInt(qm[1]);
       const exists = currentSection.questions.some(q => q.number === qNum);
       if (!exists) {
+        const yRatio = findQuestionYRatio(items, pageHeight, qNum);
         currentSection.questions.push({
           id: `${currentSection.id}-q${qNum}`,
           label: `Q.${qNum}`,
           number: qNum,
           page: pageIndex,
+          yRatio,
         });
       }
     }
   }
 
-  // Remove empty sections
   return sections.filter(s => s.questions.length > 0);
 }
