@@ -1,11 +1,13 @@
 export type QuestionStatus = 'not-visited' | 'not-answered' | 'answered' | 'marked-for-review' | 'answered-marked-for-review';
+export type QuestionType = 'Single Correct' | 'Multi Correct' | 'Numerical' | 'Unknown';
 
 export interface DetectedQuestion {
   id: string;
   label: string;
   number: number;
   page: number;
-  yRatio: number; // 0-1 ratio of vertical position on the page
+  yRatio: number;
+  questionType?: QuestionType;
 }
 
 export interface DetectedSection {
@@ -13,6 +15,7 @@ export interface DetectedSection {
   subject: string;
   sectionNumber: number;
   sectionLabel: string;
+  questionType?: QuestionType;
   questions: DetectedQuestion[];
 }
 
@@ -37,4 +40,5 @@ export interface TestSession {
   startedAt: number;
   completedAt?: number;
   timeTakenSeconds?: number;
+  paperMeta?: { year?: number; paper?: number; source?: 'default' | 'custom'; subjectOrder?: string };
 }
