@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import TestPage from "./pages/TestPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import AuthGate from "./components/AuthGate";
 
 const queryClient = new QueryClient();
 
@@ -14,6 +15,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <AuthGate>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
@@ -21,6 +23,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+    </AuthGate>
     </TooltipProvider>
   </QueryClientProvider>
 );
