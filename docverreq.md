@@ -1,5 +1,3 @@
----
-
 ### **Part 1: Standard Documents (Prepare Now)**
 These are academic, identity, and payment records that you already have or can obtain independently of the institute-specific registration forms.
 
@@ -12,8 +10,6 @@ These are academic, identity, and payment records that you already have or can o
 * [ ] **Passport-size Photographs** (carry at least 4 to 6 copies).
 * [ ] **Proof of Seat Acceptance Fee Payment** made to JoSAA/JEE.
 * [ ] **Proof of Remaining Fee Payment** (full fee payment) made to the respective IIT.
-
----
 
 ### **Part 2: Institute-Specific Forms (To be completed when officially released)**
 These forms are released by the respective IITs closer to the physical reporting date. You will need to download, print, fill, and sign them once they are made available.
